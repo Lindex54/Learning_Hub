@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout 
 from django.contrib.auth.forms import UserCreationForm
-from .models import Room, Topic
+from .models import Room, Topic, Message
 from .forms import RoomForm
 
 # Create your views here.
@@ -105,15 +105,21 @@ def home(request):
 def room(request, pk):
     # Retrieve a single room by primary key (id)
     room = Room.objects.get(id=pk)
+    room_messages = room.message_set.all().order_by('-created')
+    participants = room.participants.all()
 
-    # Example logic using the in-memory rooms list (kept for reference)
-    # room = None
-    # for i in rooms:
-    #     if i['id'] == int(pk):
-    #         room = i
+    if request.method == 'POST':
+        # Create a new message for the room
+        message = Message.objects.create(
+            user=request.user,
+            room=room,
+            body=request.POST.get('body')
+        )
+        room.participants.add(request.user)
+        # Redirect to the same room page after posting a message
+        return redirect('room', pk=room.id)
 
-    # Pass room data to the template
-    context = {'room': room}
+    context = {'room': room, 'room_messages': room_messages, 'participants': participants}
     return render(request, 'base/room.html', context) 
 
 
@@ -177,3 +183,20 @@ def deleteRoom(request, pk):
 
     # Render delete confirmation page
     return render(request, 'base/delete.html', {'obj': room})
+
+@login_required(login_url='login')
+def deleteMessage(request, pk):
+    # Retrieve the message to be deleted
+    message = Message.objects.get(id=pk)
+
+    # Ensure only the user can delete the message
+    if request.user != message.user:
+        return HttpResponse('Your are not allowed here!')
+
+    # Delete message after confirmation
+    if request.method == 'POST':
+        room.delete()
+        return redirect('home')
+
+    # Render delete confirmation page
+    return render(request, 'base/delete.html', {'obj': message})
