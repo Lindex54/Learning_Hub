@@ -7,8 +7,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout 
 from django.contrib.auth.forms import UserCreationForm
 from .models import Room, Topic, Message
-from .forms import RoomForm
-
+from .forms import RoomForm, UserForm
 # Create your views here.
 
 # ---------------------------------------------------
@@ -138,20 +137,31 @@ def userProfile(request, pk):
 def createRoom(request):
     # Initialize an empty form for creating a room
     form = RoomForm()
+    topics = Topic.objects.all()
 
     # Handle form submission
     if request.method == 'POST':
-        form = RoomForm(request.POST)
-        if form.is_valid():
-            # Save new room to the database
-            room = form.save(commit=False)
-            room.host = request.user
-            room.save()
-            return redirect('home')
+        topic_name = request.POST.get('topic')
+        topic, created = Topic.objects.get_or_create(name=topic_name)
+        
+        Room.objects.create(
+            host=request.user,
+            topic=topic,
+            name=request.POST.get('name'),
+            description=request.POST.get('description'),
+        )
+
+        # form = RoomForm(request.POST)
+        # if form.is_valid():
+        #     # Save new room to the database
+        #     room = form.save(commit=False)
+        #     room.host = request.user
+        #     room.save()
+        return redirect('home')
 
     # Re-render the form if not submitted or invalid
     form = RoomForm()
-    context = {'form': form}
+    context = {'form': form, 'topics': topics}
     return render(request, 'base/room_form.html', context)
 
 
@@ -162,6 +172,7 @@ def updateRoom(request, pk):
 
     # Populate the form with existing room data
     form = RoomForm(instance=room)
+    topics = Topic.objects.all()
 
     # Prevent users who are not the room host from editing
     if request.user != room.host:
@@ -169,14 +180,20 @@ def updateRoom(request, pk):
 
     # Handle form submission for updating the room
     if request.method == 'POST':
-        form = RoomForm(request.POST, instance=room)
-        if form.is_valid():
-            # Save changes to the room
-            form.save()
-            return redirect('home')
+        topic_name = request.POST.get('topic')
+        topic, created = Topic.objects.get_or_create(name=topic_name)
+        room.topic = topic
+        room.name = request.POST.get('name')
+        room.description = request.POST.get('description')
+        room.save()
+        # form = RoomForm(request.POST, instance=room)
+        # if form.is_valid():
+        #     # Save changes to the room
+        #     form.save()
+        return redirect('home')
 
     # Render the update form
-    context = {'form': form}
+    context = {'form': form, 'topics': topics, 'room': room}
     return render(request, 'base/room_form.html', context)
 
 
@@ -208,8 +225,28 @@ def deleteMessage(request, pk):
 
     # Delete message after confirmation
     if request.method == 'POST':
-        room.delete()
+        message.delete()
         return redirect('home')
 
     # Render delete confirmation page
     return render(request, 'base/delete.html', {'obj': message})
+
+
+@login_required(login_url='login')
+def updateUser(request):
+    user = request.user
+    form = UserForm(instance=user)
+
+    if request.method == 'POST':
+        form = UserForm(request.POST, instance=user)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.username = user.username.lower()
+            user.save()
+            login(request, user)
+            return redirect('user-profile', pk=user.id)
+        else:
+            messages.error(request, 'An error occurred during registration')
+
+    context = {'form': form}
+    return render(request, 'base/update-user.html', context)
