@@ -91,7 +91,7 @@ def home(request):
     ).order_by('-updated', '-created')
 
     # Retrieve all topics
-    topics = Topic.objects.all()
+    topics = Topic.objects.all()[0:5]
 
     # Count number of rooms returned
     room_count = rooms.count()
@@ -250,3 +250,10 @@ def updateUser(request):
 
     context = {'form': form}
     return render(request, 'base/update-user.html', context)
+
+
+
+def topicsPage(request):
+    q = request.GET.get('q') if request.GET.get('q') != None else ''
+    topics = Topic.objects.filter(name__icontains=q)
+    return render(request, 'base/topics.html', {'topics': topics} )
